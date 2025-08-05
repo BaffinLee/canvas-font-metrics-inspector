@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Font Metrics Inspector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+
+        input, select {
+            padding: 5px;
+            margin: 5px 0;
+        }
+
+        canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+        }
+
+        p {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        p div {
+            white-space: pre;
+            margin-right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Canvas Font Metrics Inspector</h1>
+
+    <label for="baseline">Draw Baseline:</label>
+    <select id="baseline" disabled>
+        <option value="alphabetic">Alphabetic</option>
+        <option value="top">Top</option>
+        <option value="middle">Middle</option>
+        <option value="bottom">Bottom</option>
+        <option value="hanging">Hanging</option>
+        <option value="mathematical">Mathematical</option>
+    </select>
+
+    <label for="measure-baseline">Measure Baseline:</label>
+    <select id="measure-baseline" disabled>
+        <option value="alphabetic">Alphabetic</option>
+        <option value="top">Top</option>
+        <option value="middle">Middle</option>
+        <option value="bottom">Bottom</option>
+        <option value="hanging">Hanging</option>
+        <option value="mathematical">Mathematical</option>
+    </select>
+
+    <label for="textInput1">Text:</label>
+    <input type="text" id="textInput1" value="Hello">
+    <input type="text" id="textInput2" value="123.,_-^">
+    <input type="text" id="textInput3" value="你好">
+    <input type="text" id="textInput4" value="こんにちは">
+    <input type="text" id="textInput5" value="안녕하세요">
+
+    <label for="fontFamily1">Font Family:</label>
+    <input type="text" id="fontFamily1" value="system-ui">
+    <input type="text" id="fontFamily2" value="system-ui">
+    <input type="text" id="fontFamily3" value="system-ui">
+    <input type="text" id="fontFamily4" value="system-ui">
+    <input type="text" id="fontFamily5" value="system-ui">
+
+    <canvas id="canvas" width="800" height="400" style="display: block;"></canvas>
+
+    <p id="metrics"></p>
+
+    <script>
+        /** @type {HTMLCanvasElement} */
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const baselineSelect = document.getElementById('baseline');
+        const measureBaselineSelect = document.getElementById('measure-baseline');
+        const textInputs = Array(5).fill(0).map((_, i) => document.getElementById(`textInput${i + 1}`));
+        const fontFamilyInputs = Array(5).fill(0).map((_, i) => document.getElementById(`fontFamily${i + 1}`));
+
+        canvas.width = Math.max(1200, Math.min(window.innerWidth - 40, 1800));
+
+        let x = 100;
+        const y = 100;
+        const fontSize = 80;
+
+        function loadUrlParams() {
+            const url = new URL(location.href);
+            url.searchParams.forEach((value, key) => {
+                if (key.startsWith('text')) {
+                    const num = Number(key.slice(4)) - 1;
+                    if (textInputs[num]) {
+                        textInputs[num].value = value;
+                    }
+                }
+                if (key.startsWith('font')) {
+                    const num = Number(key.slice(4));
+                    if (fontFamilyInputs[num]) {
+                        fontFamilyInputs[num].value = value;
+                    }
+                }
+            });
+        }
+
+        function saveUrlParams() {
+            const url = new URL(location.href);
+            textInputs.forEach((input, i) => {
+                url.searchParams.set(`text${i + 1}`, input.value);
+            });
+            fontFamilyInputs.forEach((input, i) => {
+                url.searchParams.set(`font${i + 1}`, input.value);
+            });
+            history.replaceState({}, '', url.toString());
+        }
+
+        function drawText() {
+            const baseline = baselineSelect.value;
+
+            x = 100;
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas before redrawing
+            document.getElementById('metrics').textContent = '';
+
+            textInputs.forEach((textInput, i) => {
+                const fontFamily = fontFamilyInputs[i].value;
+                const text = textInput.value;
+
+                if (!text) return;
+
+                // Set the font properties
+                ctx.font = `normal normal ${fontSize}px ${fontFamily}`;
+                ctx.textBaseline = baseline;
+                ctx.fillStyle = 'black';
+
+                // Draw the text
+                ctx.fillText(text, x, y);
+
+                // ctx.strokeStyle = "red";
+                // ctx.beginPath();
+                // ctx.moveTo(x, y);
+                // ctx.lineTo(x + width, y);
+                // ctx.stroke();
+
+                // Draw metrics
+                x += drawMetrics(fontFamily, measureBaselineSelect.value, text, x, y) + 20;
+            });
+
+            saveUrlParams();
+        }
+
+        function drawMetrics(fontFamily, baseline, text, x, y) {
+            const metrics = getFontMetrics(fontFamily, baseline, text);
+
+            ctx.strokeStyle = 'black';
+            ctx.beginPath();
+            ctx.moveTo(x, y - metrics.actualBoundingBoxAscent);
+            ctx.lineTo(x + metrics.width, y - metrics.actualBoundingBoxAscent);
+            ctx.stroke();
+            ctx.fillStyle = 'black';
+            ctx.textBaseline = 'top';
+            ctx.font = `normal normal 12px ${fontFamily}`;
+            ctx.fillText('actualAscent', x + metrics.width - ctx.measureText('actualAscent').width, y - metrics.actualBoundingBoxAscent - 12);
+
+            ctx.strokeStyle = 'green';
+            ctx.beginPath();
+            ctx.moveTo(x, y + metrics.actualBoundingBoxDescent);
+            ctx.lineTo(x + metrics.width, y + metrics.actualBoundingBoxDescent);
+            ctx.stroke();
+            ctx.fillStyle = 'green';
+            ctx.textBaseline = 'top';
+            ctx.font = `normal normal 12px ${fontFamily}`;
+            ctx.fillText('actualDescent', x + metrics.width - ctx.measureText('actualDescent').width, y + metrics.actualBoundingBoxDescent + 1);
+
+            ctx.strokeStyle = 'purple';
+            ctx.beginPath();
+            ctx.moveTo(x, y - metrics.fontBoundingBoxAscent);
+            ctx.lineTo(x + metrics.width, y - metrics.fontBoundingBoxAscent);
+            ctx.stroke();
+            ctx.fillStyle = 'purple';
+            ctx.textBaseline = 'top';
+            ctx.font = `normal normal 12px ${fontFamily}`;
+            ctx.fillText('fontAscent', x, y - metrics.fontBoundingBoxAscent - 12);
+
+            ctx.strokeStyle = 'orange';
+            ctx.beginPath();
+            ctx.moveTo(x, y + metrics.fontBoundingBoxDescent);
+            ctx.lineTo(x + metrics.width, y + metrics.fontBoundingBoxDescent);
+            ctx.stroke();
+            ctx.fillStyle = 'orange';
+            ctx.textBaseline = 'top';
+            ctx.font = `normal normal 12px ${fontFamily}`;
+            ctx.fillText('fontDescent', x, y + metrics.fontBoundingBoxDescent + 1);
+
+            const div = document.createElement('div');
+            div.textContent = JSON.stringify({
+                actualBoundingBoxAscent: metrics.actualBoundingBoxAscent,
+                actualBoundingBoxDescent: metrics.actualBoundingBoxDescent,
+                actualBoundingBoxLeft: metrics.actualBoundingBoxLeft,
+                actualBoundingBoxRight: metrics.actualBoundingBoxRight,
+                fontBoundingBoxAscent: metrics.fontBoundingBoxAscent,
+                fontBoundingBoxDescent: metrics.fontBoundingBoxDescent,
+                fontBoundingBoxLeft: metrics.fontBoundingBoxLeft,
+                fontBoundingBoxRight: metrics.fontBoundingBoxRight,
+                alphabeticBaseline: metrics.alphabeticBaseline,
+                hangingBaseline: metrics.hangingBaseline,
+                ideographicBaseline: metrics.ideographicBaseline,
+                width: metrics.width,
+            }, null, 2);
+            document.getElementById('metrics').appendChild(div);
+
+            return metrics.width;
+        }
+
+        const canvasTemp = document.createElement('canvas');
+        const ctxTemp = canvasTemp.getContext('2d');
+        function getFontMetrics(fontFamily, baseline, text) {
+            ctxTemp.font = `normal normal ${fontSize}px ${fontFamily}`;
+            ctxTemp.textBaseline = baseline;
+            return ctxTemp.measureText(text);
+        }
+
+        // Attach event listeners
+        fontFamilyInputs.forEach(fontFamilyInput => fontFamilyInput.addEventListener('input', drawText));
+        baselineSelect.addEventListener('change', drawText);
+        measureBaselineSelect.addEventListener('change', drawText);
+        textInputs.forEach(textInput => textInput.addEventListener('input', drawText));
+
+        loadUrlParams();
+
+        // Initial draw
+        drawText();
+    </script>
+</body>
+</html>
